@@ -1,0 +1,26 @@
+{
+  "plastic": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  },
+  "metal": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  },
+  "paper": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  },
+  "glass": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  },
+  "organic": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  },
+  "generic": {
+    "max_average_depth_mm": 1000,
+    "empty_threshold_percent": 80
+  }
+}

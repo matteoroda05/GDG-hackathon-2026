@@ -1,6 +1,6 @@
-# Default Application
+# Bin Monitor Application
 
-This application performs real-time object detection using a [YOLOv6 Nano](https://models.luxonis.com/luxonis/yolov6-nano/face58c4-45ab-42a0-bafc-19f9fee8a034) model and stereo depth estimation (if the device has stereo cameras). It now serves a browser dashboard that shows the live camera stream, YOLO detections, and the average depth reading.
+This application performs real-time rubbish detection using a [YOLOv6 Nano](https://models.luxonis.com/luxonis/yolov6-nano/face58c4-45ab-42a0-bafc-19f9fee8a034) model and stereo depth estimation. It serves a browser dashboard where the operator selects the expected bin class, sees the annotated computer vision stream, and gets a recap of wrong-bin objects, average depth, fullness, and whether the bin should be emptied.
 
 ## Demo
 
@@ -46,13 +46,22 @@ Running in peripheral mode requires a host computer and there will be communicat
 python3 main.py
 ```
 
-This will run the example with default arguments. Open the dashboard in your browser at http://localhost:8080.
+This will run the example with default arguments. Open the dashboard in your browser at http://localhost:8080 or http://localhost:8080/bin-monitor.
 
 If you want to change the dashboard host or port, pass the new values explicitly:
 
 ```bash
 python3 main.py --web-host 0.0.0.0 --web-port 8080
 ```
+
+## Bin Configuration
+
+Bin depth and emptying thresholds are configured in `bin_config.json`. Each trash class has:
+
+- `max_average_depth_mm`: the empty-bin average depth from the top-mounted camera.
+- `empty_threshold_percent`: the fullness percentage at which the bin should be emptied.
+
+The default demo values are `1000 mm` and `80%` for each class.
 
 ## Standalone Mode (RVC4 only)
 
