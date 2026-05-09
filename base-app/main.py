@@ -5,18 +5,62 @@ from depthai_nodes.node import ApplyDepthColormap
 from typing import Optional
 from utils.arguments import initialize_argparser
 
-_, args = initialize_argparser()
+import numpy as np
 
-visualizer = dai.RemoteConnection(httpPort=8082)
-device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
 
-NN_DIMENSIONS = (512, 288)
+class DepthDashboardNode(dai.node.ThreadedHostNode):
+    def __init__(self):
+        super().__init__()
+        # We no longer need an inputFrame, just the spatial data
+        self.inputSpatial = self.createInput()
+        self.output = self.createOutput()
 
-if not device.setIrLaserDotProjectorIntensity(1):
-    print(
-        "Failed to set IR laser projector intensity. Maybe your device does not support this feature."
-    )
-with dai.Pipeline(device) as pipeline:
+        # Dimensions for our standalone info box
+        self.width = 400
+        self.height = 200
+
+    def run(self):
+        while self.isRunning():
+            spatialMsg = self.inputSpatial.get()
+
+            if spatialMsg is not None:
+                # Create a black background canvas
+                frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+
+                # Get the average depth from the spatial locations
+                locations = spatialMsg.getSpatialLocations()
+                if locations:
+                    avg_z = locations[0].spatialCoordinates.z
+
+                    # Style the dashboard
+                    cv2.putText(frame, "AVERAGE DEPTH", (20, 60),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 1)
+
+                    color = (0, 255, 0) if avg_z > 0 else (0, 0, 255)
+                    text = f"{avg_z:.1f} mm"
+                    cv2.putText(frame, text, (20, 130),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
+
+                # Create and send the frame to the visualizer
+                outMsg = dai.ImgFrame()
+                outMsg.setData(frame)
+                outMsg.setWidth(self.width)
+                outMsg.setHeight(self.height)
+                outMsg.setType(dai.ImgFrame.Type.BGR888i)
+                self.output.send(outMsg)
+
+def run_device(args):
+    visualizer = dai.RemoteConnection(httpPort=8082)
+    device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
+
+    NN_DIMENSIONS = (512, 288)
+
+    if not device.setIrLaserDotProjectorIntensity(1):
+        print(
+            "Failed to set IR laser projector intensity. Maybe your device does not support this feature."
+        )
+
+    pipeline = dai.Pipeline(device)
     print("Creating pipeline...")
     platform = device.getPlatform()
 
@@ -48,48 +92,45 @@ with dai.Pipeline(device) as pipeline:
 
     # Add the remote connector topics
     visualizer.addTopic("Raw video", outputToEncode)
-    visualizer.addTopic("Video H264", h264Encoder.out)
     visualizer.addTopic("Detections", detectionNetwork.out)
 
     # Stereo depth - only for stereo devices
-    cameraFeatures = device.getConnectedCameraFeatures()
+    left = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
+    right = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
 
-    cam_mono_1: Optional[dai.CameraBoardSocket] = None
-    cam_mono_2: Optional[dai.CameraBoardSocket] = None
-    for feature in cameraFeatures:
-        if dai.CameraSensorType.MONO in feature.supportedTypes:
-            if cam_mono_1 is None:
-                cam_mono_1 = feature.socket
-            else:
-                cam_mono_2 = feature.socket
-                break
-    if cam_mono_1 and cam_mono_2:
-        device.setIrLaserDotProjectorIntensity(1)
-        left_cam = pipeline.create(dai.node.Camera).build(cam_mono_1)
-        right_cam = pipeline.create(dai.node.Camera).build(cam_mono_2)
-        stereo = pipeline.create(dai.node.StereoDepth).build(
-            left=left_cam.requestFullResolutionOutput(dai.ImgFrame.Type.NV12),
-            right=right_cam.requestFullResolutionOutput(dai.ImgFrame.Type.NV12),
-            presetMode=dai.node.StereoDepth.PresetMode.DEFAULT,
-        )
+    left_out = left.requestOutput(NN_DIMENSIONS, type=dai.ImgFrame.Type.NV12)
+    right_out = right.requestOutput(NN_DIMENSIONS, type=dai.ImgFrame.Type.NV12)
 
-        # RVC4 does not support stereo.setDepthAlign, ImageAlign node used instead
-        if platform == dai.Platform.RVC4:
-            cam_out = cameraNode.requestOutput(
-                (640, 480), type=dai.ImgFrame.Type.NV12, enableUndistortion=True
-            )
-            align = pipeline.create(dai.node.ImageAlign)
-            stereo.depth.link(align.input)
-            cam_out.link(align.inputAlignTo)
-            coloredDepth = pipeline.create(ApplyDepthColormap).build(
-                align.outputAligned
-            )
-        else:
-            stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
-            stereo.setOutputSize(800, 600)
-            coloredDepth = pipeline.create(ApplyDepthColormap).build(stereo.disparity)
-        coloredDepth.setColormap(cv2.COLORMAP_JET)
-        visualizer.addTopic("Depth", coloredDepth.out)
+    stereo = pipeline.create(dai.node.StereoDepth).build(
+        left=left_out,
+        right=right_out,
+        presetMode=dai.node.StereoDepth.PresetMode.DEFAULT,
+    )
+
+    align = pipeline.create(dai.node.ImageAlign)
+    stereo.depth.link(align.input)
+    outputToEncode.link(align.inputAlignTo)
+
+    spatialCalc = pipeline.create(dai.node.SpatialLocationCalculator)
+    input_depth = align.outputAligned if platform == dai.Platform.RVC4 else stereo.depth
+    input_depth.link(spatialCalc.inputDepth)
+
+    # Set ROI to full image (0,0 to 1,1)
+    config_depth = dai.SpatialLocationCalculatorConfigData()
+    config_depth.roi = dai.Rect(0.4, 0.4, 0.6, 0.6)
+    config_depth.depthThresholds.lowerThreshold = 100  # mm
+    config_depth.depthThresholds.upperThreshold = 10000  # mm
+    config_depth.calculationAlgorithm = dai.SpatialLocationCalculatorAlgorithm.MEAN
+    spatialCalc.initialConfig.addROI(config_depth)
+
+    dashboard = pipeline.create(DepthDashboardNode)
+    spatialCalc.out.link(dashboard.inputSpatial)
+
+    visualizer.addTopic("Depth Map", align.outputAligned if platform == dai.Platform.RVC4 else stereo.depth)
+    visualizer.addTopic("Depth Stats", dashboard.output)
+
+    spatialDataQueue = spatialCalc.out.createOutputQueue()
+
 
     print("Pipeline created.")
 
@@ -101,3 +142,8 @@ with dai.Pipeline(device) as pipeline:
         if key == ord("q"):
             print("Got q key from the remote connection!")
             break
+
+
+if __name__ == "__main__":
+    _, ags = initialize_argparser()
+    run_device(ags)
