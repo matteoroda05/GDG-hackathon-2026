@@ -232,6 +232,7 @@ def run_device(args):
             nn_archive,
         )
 
+    outputToEncode = camera_node.requestOutput((1440, 1080), type=dai.ImgFrame.Type.NV12)
     preview_output = camera_node.requestOutput(
         preview_dimensions, type=dai.ImgFrame.Type.BGR888i
     )
@@ -250,13 +251,14 @@ def run_device(args):
 
     align = pipeline.create(dai.node.ImageAlign)
     stereo.depth.link(align.input)
+    outputToEncode.link(align.inputAlignTo)
 
     spatial_calc = pipeline.create(dai.node.SpatialLocationCalculator)
     input_depth = align.outputAligned if platform == dai.Platform.RVC4 else stereo.depth
     input_depth.link(spatial_calc.inputDepth)
 
     config_depth = dai.SpatialLocationCalculatorConfigData()
-    config_depth.roi = dai.Rect(0.4, 0.4, 0.6, 0.6)
+    config_depth.roi = dai.Rect(0.2, 0.2, 0.8, 0.8)
     config_depth.depthThresholds.lowerThreshold = 100
     config_depth.depthThresholds.upperThreshold = 10000
     config_depth.calculationAlgorithm = dai.SpatialLocationCalculatorAlgorithm.MEAN
@@ -282,7 +284,7 @@ def run_device(args):
 
     try:
         while pipeline.isRunning():
-            time.sleep(0.5)
+            time.sleep(0.2)
     except KeyboardInterrupt:
         print("Stopping pipeline on keyboard interrupt.")
 
