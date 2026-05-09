@@ -1,59 +1,208 @@
 #!/usr/bin/env python3
+import os
+import threading
+import time
+from typing import Any, Dict, List
+
 import cv2
 import depthai as dai
-from depthai_nodes.node import ApplyDepthColormap
-from typing import Optional
+
 from utils.arguments import initialize_argparser
+from webapp import DashboardServer, DashboardStore
 
-import numpy as np
+
+COCO_LABELS = [
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+]
 
 
-class DepthDashboardNode(dai.node.ThreadedHostNode):
-    def __init__(self):
-        super().__init__()
-        # We no longer need an inputFrame, just the spatial data
-        self.inputSpatial = self.createInput()
-        self.output = self.createOutput()
+def _detection_label(detection: Any) -> str:
+    label_id = int(getattr(detection, "label", -1))
+    if 0 <= label_id < len(COCO_LABELS):
+        return COCO_LABELS[label_id]
+    return f"class {label_id}"
 
-        # Dimensions for our standalone info box
-        self.width = 400
-        self.height = 200
 
-    def run(self):
-        while self.isRunning():
-            spatialMsg = self.inputSpatial.get()
+def _detection_dict(detection: Any) -> Dict[str, Any]:
+    xmin = float(getattr(detection, "xmin", 0.0))
+    ymin = float(getattr(detection, "ymin", 0.0))
+    xmax = float(getattr(detection, "xmax", xmin))
+    ymax = float(getattr(detection, "ymax", ymin))
+    return {
+        "label": _detection_label(detection),
+        "label_id": int(getattr(detection, "label", -1)),
+        "confidence": float(getattr(detection, "confidence", 0.0)),
+        "xmin": xmin,
+        "ymin": ymin,
+        "xmax": xmax,
+        "ymax": ymax,
+        "width": xmax - xmin,
+        "height": ymax - ymin,
+    }
 
-            if spatialMsg is not None:
-                # Create a black background canvas
-                frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
-                # Get the average depth from the spatial locations
-                locations = spatialMsg.getSpatialLocations()
-                if locations:
-                    avg_z = locations[0].spatialCoordinates.z
+def _depth_value_from_message(message: Any) -> float | None:
+    locations = getattr(message, "getSpatialLocations", lambda: [])()
+    if not locations:
+        return None
+    return float(locations[0].spatialCoordinates.z)
 
-                    # Style the dashboard
-                    cv2.putText(frame, "AVERAGE DEPTH", (20, 60),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 1)
 
-                    color = (0, 255, 0) if avg_z > 0 else (0, 0, 255)
-                    text = f"{avg_z:.1f} mm"
-                    cv2.putText(frame, text, (20, 130),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
+def _annotate_frame(frame, detections: List[Dict[str, Any]]):
+    height, width = frame.shape[:2]
+    for detection in detections:
+        x1 = max(0, min(width - 1, int(detection["xmin"] * width)))
+        y1 = max(0, min(height - 1, int(detection["ymin"] * height)))
+        x2 = max(0, min(width - 1, int(detection["xmax"] * width)))
+        y2 = max(0, min(height - 1, int(detection["ymax"] * height)))
 
-                # Create and send the frame to the visualizer
-                outMsg = dai.ImgFrame()
-                outMsg.setData(frame)
-                outMsg.setWidth(self.width)
-                outMsg.setHeight(self.height)
-                outMsg.setType(dai.ImgFrame.Type.BGR888i)
-                self.output.send(outMsg)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (102, 227, 180), 2)
+        label = f"{detection['label']} {int(detection['confidence'] * 100)}%"
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
+        )
+        top = max(0, y1 - text_height - baseline - 8)
+        cv2.rectangle(
+            frame,
+            (x1, top),
+            (x1 + text_width + 10, top + text_height + baseline + 8),
+            (17, 24, 39),
+            -1,
+        )
+        cv2.putText(
+            frame,
+            label,
+            (x1 + 5, top + text_height + 3),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (235, 243, 255),
+            2,
+        )
+
+    return frame
+
+
+def _consume_frames(frame_queue, store: DashboardStore):
+    while True:
+        message = frame_queue.get()
+        if message is None:
+            continue
+
+        frame = message.getCvFrame()
+        detections = store.snapshot().detections
+        annotated = _annotate_frame(frame, detections)
+        success, encoded = cv2.imencode(
+            ".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82]
+        )
+        if success:
+            store.update_frame(encoded.tobytes())
+
+
+def _consume_detections(detection_queue, store: DashboardStore):
+    while True:
+        message = detection_queue.get()
+        if message is None:
+            continue
+
+        detections = [_detection_dict(detection) for detection in getattr(message, "detections", [])]
+        store.update_detections(detections)
+
+
+def _consume_depth(depth_queue, store: DashboardStore):
+    while True:
+        message = depth_queue.get()
+        if message is None:
+            continue
+
+        store.update_depth(_depth_value_from_message(message))
+
 
 def run_device(args):
-    visualizer = dai.RemoteConnection(httpPort=8082)
     device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
+    web_host = args.web_host or "0.0.0.0"
+    web_port = int(args.web_port or os.environ.get("PORT", "8080"))
 
-    NN_DIMENSIONS = (512, 288)
+    preview_dimensions = (1280, 720)
+    nn_dimensions = (512, 288)
 
     if not device.setIrLaserDotProjectorIntensity(1):
         print(
@@ -69,79 +218,73 @@ def run_device(args):
     )
 
     nn_archive = dai.NNArchive(dai.getModelFromZoo(model_description))
-    cameraNode = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+    camera_node = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
 
     if platform == dai.Platform.RVC2:
-        detectionNetwork = pipeline.create(dai.node.DetectionNetwork)
-        cameraNode.requestOutput(NN_DIMENSIONS, dai.ImgFrame.Type.BGR888p).link(
-            detectionNetwork.input
+        detection_network = pipeline.create(dai.node.DetectionNetwork)
+        camera_node.requestOutput(nn_dimensions, dai.ImgFrame.Type.BGR888p).link(
+            detection_network.input
         )
-        detectionNetwork.setNNArchive(nn_archive, numShaves=4)
+        detection_network.setNNArchive(nn_archive, numShaves=4)
     else:
-        detectionNetwork = pipeline.create(dai.node.DetectionNetwork).build(
-            cameraNode.requestOutput(NN_DIMENSIONS, dai.ImgFrame.Type.BGR888i),
+        detection_network = pipeline.create(dai.node.DetectionNetwork).build(
+            camera_node.requestOutput(nn_dimensions, dai.ImgFrame.Type.BGR888i),
             nn_archive,
         )
 
-    outputToEncode = cameraNode.requestOutput((1440, 1080), type=dai.ImgFrame.Type.NV12)
-    h264Encoder = pipeline.create(dai.node.VideoEncoder)
-    h264Encoder.setDefaultProfilePreset(
-        30, dai.VideoEncoderProperties.Profile.H264_MAIN
+    preview_output = camera_node.requestOutput(
+        preview_dimensions, type=dai.ImgFrame.Type.BGR888i
     )
-    outputToEncode.link(h264Encoder.input)
 
-    # Add the remote connector topics
-    visualizer.addTopic("Raw video", outputToEncode)
-    visualizer.addTopic("Detections", detectionNetwork.out)
-
-    # Stereo depth - only for stereo devices
     left = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
     right = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
 
-    left_out = left.requestOutput(NN_DIMENSIONS, type=dai.ImgFrame.Type.NV12)
-    right_out = right.requestOutput(NN_DIMENSIONS, type=dai.ImgFrame.Type.NV12)
+    left_output = left.requestOutput(nn_dimensions, type=dai.ImgFrame.Type.NV12)
+    right_output = right.requestOutput(nn_dimensions, type=dai.ImgFrame.Type.NV12)
 
     stereo = pipeline.create(dai.node.StereoDepth).build(
-        left=left_out,
-        right=right_out,
+        left=left_output,
+        right=right_output,
         presetMode=dai.node.StereoDepth.PresetMode.DEFAULT,
     )
 
     align = pipeline.create(dai.node.ImageAlign)
     stereo.depth.link(align.input)
-    outputToEncode.link(align.inputAlignTo)
 
-    spatialCalc = pipeline.create(dai.node.SpatialLocationCalculator)
+    spatial_calc = pipeline.create(dai.node.SpatialLocationCalculator)
     input_depth = align.outputAligned if platform == dai.Platform.RVC4 else stereo.depth
-    input_depth.link(spatialCalc.inputDepth)
+    input_depth.link(spatial_calc.inputDepth)
 
-    # Set ROI to full image (0,0 to 1,1)
     config_depth = dai.SpatialLocationCalculatorConfigData()
     config_depth.roi = dai.Rect(0.4, 0.4, 0.6, 0.6)
-    config_depth.depthThresholds.lowerThreshold = 100  # mm
-    config_depth.depthThresholds.upperThreshold = 10000  # mm
+    config_depth.depthThresholds.lowerThreshold = 100
+    config_depth.depthThresholds.upperThreshold = 10000
     config_depth.calculationAlgorithm = dai.SpatialLocationCalculatorAlgorithm.MEAN
-    spatialCalc.initialConfig.addROI(config_depth)
+    spatial_calc.initialConfig.addROI(config_depth)
 
-    dashboard = pipeline.create(DepthDashboardNode)
-    spatialCalc.out.link(dashboard.inputSpatial)
+    store = DashboardStore()
+    dashboard = DashboardServer(web_host, web_port, store)
 
-    visualizer.addTopic("Depth Map", align.outputAligned if platform == dai.Platform.RVC4 else stereo.depth)
-    visualizer.addTopic("Depth Stats", dashboard.output)
+    preview_queue = preview_output.createOutputQueue()
+    detection_queue = detection_network.out.createOutputQueue()
+    depth_queue = spatial_calc.out.createOutputQueue()
 
-    spatialDataQueue = spatialCalc.out.createOutputQueue()
+    print(f"Web dashboard available at http://{web_host}:{web_port}")
+    dashboard.start()
 
+    pipeline.start()
+
+    threading.Thread(target=_consume_frames, args=(preview_queue, store), daemon=True).start()
+    threading.Thread(target=_consume_detections, args=(detection_queue, store), daemon=True).start()
+    threading.Thread(target=_consume_depth, args=(depth_queue, store), daemon=True).start()
 
     print("Pipeline created.")
 
-    pipeline.start()
-    visualizer.registerPipeline(pipeline)
-
-    while pipeline.isRunning():
-        key = visualizer.waitKey(1)
-        if key == ord("q"):
-            print("Got q key from the remote connection!")
-            break
+    try:
+        while pipeline.isRunning():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("Stopping pipeline on keyboard interrupt.")
 
 
 if __name__ == "__main__":

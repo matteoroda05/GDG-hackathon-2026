@@ -17,6 +17,22 @@ def initialize_argparser():
         type=str,
     )
 
+    parser.add_argument(
+        "--web-host",
+        help="Host interface for the browser dashboard.",
+        required=False,
+        default="0.0.0.0",
+        type=str,
+    )
+
+    parser.add_argument(
+        "--web-port",
+        help="Port for the browser dashboard.",
+        required=False,
+        default=8080,
+        type=int,
+    )
+
     args = parser.parse_args()
 
     return parser, args
