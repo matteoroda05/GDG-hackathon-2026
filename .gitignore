@@ -219,3 +219,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# TACO6 training data and model artifacts
+training/artifacts/
+training/data/
+training/runs/
+taco6_yolov6*/
+yolov6_runs/
+YOLOv6/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.dlc
+*.blob
