@@ -1,0 +1,181 @@
+{
+  "annotation_counts": {
+    "train": {
+      "0": 2478,
+      "1": 900,
+      "2": 438,
+      "3": 594,
+      "4": 12,
+      "5": 1959
+    },
+    "val": {
+      "0": 440,
+      "1": 96,
+      "2": 38,
+      "3": 56,
+      "4": 4,
+      "5": 323
+    }
+  },
+  "annotations_path": "/kaggle/input/datasets/kneroma/tacotrashdataset/data/annotations.json",
+  "bin_image_counts": {
+    "train": {
+      "0": 1132,
+      "1": 447,
+      "2": 327,
+      "3": 216,
+      "4": 9,
+      "5": 739
+    },
+    "val": {
+      "0": 227,
+      "1": 61,
+      "2": 28,
+      "3": 23,
+      "4": 4,
+      "5": 129
+    }
+  },
+  "class_ids": {
+    "generic": 5,
+    "glass": 3,
+    "metal": 1,
+    "organic": 4,
+    "paper": 2,
+    "plastic": 0
+  },
+  "classes": [
+    "plastic",
+    "metal",
+    "paper",
+    "glass",
+    "organic",
+    "generic"
+  ],
+  "copy_mode": "copy",
+  "diagnostics": {
+    "missing_images": [],
+    "skipped_invalid_boxes": 0,
+    "source_annotations": 4784,
+    "source_images": 1500
+  },
+  "limit_images": null,
+  "mapped_taco_categories": {
+    "Aerosol": "metal",
+    "Aluminium blister pack": "metal",
+    "Aluminium foil": "metal",
+    "Battery": "generic",
+    "Broken glass": "glass",
+    "Carded blister pack": "generic",
+    "Cigarette": "generic",
+    "Clear plastic bottle": "plastic",
+    "Corrugated carton": "generic",
+    "Crisp packet": "generic",
+    "Disposable food container": "plastic",
+    "Disposable plastic cup": "plastic",
+    "Drink can": "metal",
+    "Drink carton": "generic",
+    "Egg carton": "generic",
+    "Foam cup": "plastic",
+    "Foam food container": "plastic",
+    "Food Can": "metal",
+    "Food waste": "organic",
+    "Garbage bag": "plastic",
+    "Glass bottle": "glass",
+    "Glass cup": "glass",
+    "Glass jar": "glass",
+    "Magazine paper": "paper",
+    "Meal carton": "generic",
+    "Metal bottle cap": "metal",
+    "Metal lid": "metal",
+    "Normal paper": "paper",
+    "Other carton": "generic",
+    "Other plastic": "plastic",
+    "Other plastic bottle": "plastic",
+    "Other plastic container": "plastic",
+    "Other plastic cup": "plastic",
+    "Other plastic wrapper": "plastic",
+    "Paper bag": "paper",
+    "Paper cup": "generic",
+    "Paper straw": "paper",
+    "Pizza box": "generic",
+    "Plastic bottle cap": "plastic",
+    "Plastic film": "plastic",
+    "Plastic glooves": "plastic",
+    "Plastic lid": "plastic",
+    "Plastic straw": "plastic",
+    "Plastic utensils": "plastic",
+    "Plastified paper bag": "generic",
+    "Polypropylene bag": "plastic",
+    "Pop tab": "metal",
+    "Rope & strings": "generic",
+    "Scrap metal": "metal",
+    "Shoe": "generic",
+    "Single-use carrier bag": "plastic",
+    "Six pack rings": "plastic",
+    "Spread tub": "plastic",
+    "Squeezable tube": "generic",
+    "Styrofoam piece": "plastic",
+    "Tissues": "paper",
+    "Toilet tube": "paper",
+    "Tupperware": "plastic",
+    "Unlabeled litter": "generic",
+    "Wrapping paper": "paper"
+  },
+  "mapping_path": "/kaggle/working/GDG-hackathon-2026/training/taco6_map.yaml",
+  "original_records": 1500,
+  "oversampling": {
+    "after_bin_image_counts": {
+      "0": 1132,
+      "1": 447,
+      "2": 327,
+      "3": 216,
+      "4": 9,
+      "5": 739
+    },
+    "before_bin_image_counts": {
+      "0": 889,
+      "1": 229,
+      "2": 109,
+      "3": 72,
+      "4": 3,
+      "5": 515
+    },
+    "duplicates_added": 486,
+    "enabled": true,
+    "max_appearances": 3,
+    "shortfalls": {
+      "2": {
+        "actual": 327,
+        "target": 445
+      },
+      "3": {
+        "actual": 216,
+        "target": 445
+      },
+      "4": {
+        "actual": 9,
+        "target": 445
+      }
+    },
+    "target_fraction": 0.5,
+    "target_image_count": 445
+  },
+  "seed": 2026,
+  "source_root": "/kaggle/input/datasets/kneroma/tacotrashdataset/data",
+  "split_records": {
+    "train": 1200,
+    "val": 300
+  },
+  "train_ratio": 0.8,
+  "written_records": {
+    "train": {
+      "empty_label_files": 0,
+      "images": 1686
+    },
+    "val": {
+      "empty_label_files": 0,
+      "images": 300
+    }
+  }
+}

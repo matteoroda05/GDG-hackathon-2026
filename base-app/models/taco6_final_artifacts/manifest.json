@@ -1,0 +1,15 @@
+{
+  "artifact_dir": "/kaggle/working/taco6_final_artifacts",
+  "zip_path": "/kaggle/working/taco6_final_artifacts.zip",
+  "best_checkpoint_found": true,
+  "last_checkpoint_found": true,
+  "onnx_found": true,
+  "summary_found": true,
+  "files": [
+    "taco6_best_ckpt.onnx",
+    "taco6_best_ckpt.pt",
+    "taco6_dataset_summary.json",
+    "taco6_last_ckpt.pt",
+    "taco6_predictions.json"
+  ]
+}
