@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eco-Island Rubbish Detection System - Hackathon 2026</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            color-scheme: dark;
+            --bg: #101417;
+            --surface: #171d21;
+            --surface-2: #20282d;
+            --surface-3: #14191d;
+            --border: #344148;
+            --text: #eef3f5;
+            --muted: #a9b6bc;
+            --ok: #5ee0a0;
+            --warn: #ffc857;
+            --bad: #ff6b6b;
+            --info: #76c7f2;
+            --info-strong: #d7f2ff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .presentation-container {
+            width: 100%;
+            max-width: 1100px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+        }
+
+        .slide {
+            display: none;
+            padding: 70px 60px;
+            min-height: 650px;
+            animation: slideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        @keyframes slideIn {
+            from { 
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Title Slide */
+        .slide-title {
+            background: linear-gradient(135deg, var(--surface) 0%, #143142 100%);
+            color: var(--text);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide-title::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgba(118, 199, 242, 0.08) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(118, 199, 242, 0.08) 1px, transparent 1px);
+            background-size: 44px 44px;
+            -webkit-mask-image: linear-gradient(to bottom, black, transparent 82%);
+            mask-image: linear-gradient(to bottom, black, transparent 82%);
+        }
+
+        .slide-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--ok), var(--info), var(--warn), var(--bad));
+        }
+
+        .slide-title h1 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 3.8em;
+            font-weight: 800;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+            letter-spacing: 0;
+        }
+
+        .slide-title p {
+            font-size: 1.4em;
+            margin-bottom: 10px;
+            color: var(--muted);
+            position: relative;
+            z-index: 1;
+            font-weight: 300;
+        }
+
+        .slide-title .subtitle {
+            font-size: 1.2em;
+            margin-top: 40px;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Content Slides */
+        .slide h2 {
+            font-family: 'Poppins', sans-serif;
+            color: var(--info-strong);
+            font-size: 2.8em;
+            font-weight: 700;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, var(--info-strong) 0%, var(--ok) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 0;
+        }
+
+        .slide h3 {
+            color: var(--text);
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.6em;
+            margin: 30px 0 15px 0;
+            font-weight: 600;
+        }
+
+        .slide ul, .slide ol {
+            margin: 25px 0 25px 35px;
+            line-height: 2;
+        }
+
+        .slide li {
+            margin: 16px 0;
+            font-size: 1.1em;
+            color: var(--text);
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .slide li:nth-child(1) { animation-delay: 0.1s; }
+        .slide li:nth-child(2) { animation-delay: 0.2s; }
+        .slide li:nth-child(3) { animation-delay: 0.3s; }
+        .slide li:nth-child(4) { animation-delay: 0.4s; }
+        .slide li:nth-child(5) { animation-delay: 0.5s; }
+
+        .slide p {
+            font-size: 1.1em;
+            line-height: 1.9;
+            margin: 20px 0;
+            color: var(--muted);
+            font-weight: 300;
+        }
+
+        .slide-visual {
+            display: block;
+            width: 100%;
+            max-height: 280px;
+            object-fit: contain;
+            margin: 28px auto 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-3);
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+        }
+
+        .slide-visual.compact {
+            max-height: 220px;
+        }
+
+        .slide-title .slide-visual {
+            max-width: 760px;
+            max-height: 260px;
+            margin-top: 34px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .media-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+            gap: 34px;
+            align-items: center;
+        }
+
+        .media-row .slide-visual {
+            margin: 0;
+        }
+
+        .media-row .feature-grid,
+        .media-row .modules-grid {
+            grid-template-columns: 1fr;
+            margin: 0;
+        }
+
+        .visual-stack {
+            margin: 0;
+        }
+
+        .web-photo {
+            aspect-ratio: 16 / 10;
+            max-height: 300px;
+            object-fit: cover;
+        }
+
+        .image-credit {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            line-height: 1.4;
+            text-align: right;
+        }
+
+        .image-credit a {
+            color: var(--info);
+            text-decoration: none;
+        }
+
+        .media-row ul,
+        .media-row ol {
+            margin-bottom: 0;
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin: 40px 0;
+        }
+
+        .feature-card {
+            background: var(--surface-2);
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--ok) 0%, var(--info) 100%);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 36px rgba(0, 0, 0, 0.24);
+            border-color: var(--info);
+        }
+
+        .feature-card h4 {
+            color: var(--info);
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            font-size: 0.95em;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        /* Category Tags */
+        .categories {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin: 25px 0;
+        }
+
+        .category-tag {
+            background: #143142;
+            color: var(--info-strong);
+            padding: 12px 20px;
+            border: 1px solid var(--info);
+            border-radius: 999px;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .category-tag:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+        }
+
+        /* Workflow */
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 28px;
+        }
+
+        .workflow-card {
+            min-height: 260px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px 20px;
+            position: relative;
+            opacity: 0;
+            transform: translateY(18px);
+        }
+
+        .slide.active .workflow-card {
+            animation: fadeInUp 0.55s ease-out forwards;
+        }
+
+        .slide.active .workflow-card:nth-child(1) { animation-delay: 0.1s; }
+        .slide.active .workflow-card:nth-child(2) { animation-delay: 0.35s; }
+        .slide.active .workflow-card:nth-child(3) { animation-delay: 0.6s; }
+        .slide.active .workflow-card:nth-child(4) { animation-delay: 0.85s; }
+
+        .workflow-card::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -18px;
+            width: 18px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--info), transparent);
+        }
+
+        .workflow-card:last-child::after {
+            display: none;
+        }
+
+        .workflow-number {
+            width: 44px;
+            height: 44px;
+            border: 1px solid var(--info);
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            color: var(--info-strong);
+            background: #143142;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            margin-bottom: 26px;
+        }
+
+        .workflow-card h3 {
+            margin: 0 0 16px;
+            font-size: 1.35em;
+        }
+
+        .workflow-card p {
+            margin: 0;
+            font-size: 1em;
+            line-height: 1.65;
+        }
+
+        /* Modules */
+        .modules-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .module-item {
+            background: var(--surface-2);
+            padding: 18px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--info);
+            font-size: 0.95em;
+            font-weight: 500;
+            color: var(--text);
+            transition: all 0.3s ease;
+        }
+
+        .module-item:hover {
+            transform: translateX(5px);
+            border-left-color: var(--ok);
+        }
+
+        /* Navigation */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 25px 60px;
+            background: var(--surface-3);
+            border-top: 1px solid var(--border);
+        }
+
+        .slide-counter {
+            color: var(--info);
+            font-weight: 700;
+            font-size: 1.1em;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .progress-bar {
+            width: 150px;
+            height: 3px;
+            background: var(--surface-2);
+            border-radius: 2px;
+            margin: 0 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ok) 0%, var(--info) 60%, var(--warn) 100%);
+            transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: #143142;
+            border-left: 4px solid var(--info);
+            padding: 25px;
+            border-radius: 8px;
+            margin: 25px 0;
+            border: 1px solid var(--border);
+        }
+
+        .highlight-box strong {
+            color: var(--info-strong);
+            font-weight: 600;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 30px;
+        }
+
+        .stat-card {
+            min-height: 130px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-2);
+            padding: 22px;
+        }
+
+        .stat-card strong {
+            display: block;
+            color: var(--info);
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.25em;
+            margin-bottom: 10px;
+        }
+
+        .closing-mark {
+            color: var(--ok);
+            font-family: 'Poppins', sans-serif;
+            font-size: clamp(4rem, 12vw, 8rem);
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .slide {
+                padding: 40px 25px;
+                min-height: 500px;
+            }
+
+            .slide-title h1 {
+                font-size: 2.5em;
+            }
+
+            .slide h2 {
+                font-size: 2em;
+            }
+
+            .feature-grid, .modules-grid, .media-row, .stat-row, .workflow-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .workflow-card {
+                min-height: auto;
+            }
+
+            .workflow-card::after {
+                display: none;
+            }
+
+            .slide-visual,
+            .slide-title .slide-visual {
+                max-height: 210px;
+            }
+
+            .controls {
+                padding: 15px 25px;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .progress-bar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation-container">
+        <!-- Slide 1: Title -->
+        <div class="slide slide-title active">
+            <h1>Smart Eco-Island Rubbish Detection</h1>
+            <p>AI-powered sorting plus depth-aware bin monitoring powered by Luxonis OAK-D Pro.</p>
+            <p class="subtitle">Designed to automate disposal decisions and verify what happens inside each bin.</p>
+        </div>
+
+        <!-- Slide 2: Problem -->
+        <div class="slide">
+            <h2>Two Problems, One Eco-Island</h2>
+            <div class="media-row">
+                <div>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h4>Problem 1: User Mistakes</h4>
+                            <p>Public bins rely on users choosing correctly. One wrong item can contaminate an entire recycling stream.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4>Problem 2: Bin Operations</h4>
+                            <p>Wrong objects inside bins and early collection both create high costs: cleanup, rejected batches, and unnecessary pickup routes.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="visual-stack">
+                    <img class="slide-visual web-photo" src="https://www.colorado.edu/ecenter/sites/default/files/styles/large_image_style/public/article-image/recycling_bin_overflowing_with_trash_0.jpg?itok=fDB__DxX" alt="Overflowing recycling bin with mixed waste">
+                    <div class="image-credit">Image source: <a href="https://www.colorado.edu/ecenter/">colorado.edu</a></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Solution -->
+        <div class="slide">
+            <h2>Complementary Solutions</h2>
+            <p>The two parts work together, which is why they deserve separate dashboard views.</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Solution 1: Automatic Sorting</h4>
+                    <p>The system classifies the item at the deposit point and routes it to the correct trash category.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>Solution 2: Verify &amp; Monitor Bins</h4>
+                    <p>Depth tracking detects the wrong object position, notifies the operator dashboard, and estimates whether the bin or eco-island is actually full.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Workflow -->
+        <div class="slide">
+            <h2>Eco-Island Workflow</h2>
+            <div class="workflow-grid">
+                <div class="workflow-card">
+                    <div class="workflow-number">1</div>
+                    <h3>Authenticate</h3>
+                    <p>User identifies themselves via card or app to begin the disposal session.</p>
+                </div>
+                <div class="workflow-card">
+                    <div class="workflow-number">2</div>
+                    <h3>Deposit</h3>
+                    <p>User places the waste item into the designated central detection area.</p>
+                </div>
+                <div class="workflow-card">
+                    <div class="workflow-number">3</div>
+                    <h3>Identify &amp; Route</h3>
+                    <p>RGB-based inference identifies the waste category and routes the object to the right bin.</p>
+                </div>
+                <div class="workflow-card">
+                    <div class="workflow-number">4</div>
+                    <h3>Depth Verify</h3>
+                    <p>After routing, depth analysis tracks where the object lands, checks for wrong-bin placement, and estimates fullness.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Hardware -->
+        <div class="slide">
+            <h2>Why OAK-D Pro: Depth Is the Point</h2>
+            <div class="media-row">
+                <div>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h4>RGB for What It Is</h4>
+                            <p>On-device neural inference classifies the waste material at the moment of disposal.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4>Depth Estimation</h4>
+                            <p>Stereo depth tracks the object position inside the bin and estimates remaining capacity, turning the camera into an operations sensor.</p>
+                        </div>
+                    </div>
+                </div>
+                <img class="slide-visual" src="assets/presentation/detection-frame.svg" alt="Depth camera detection preview with waste objects marked in the frame">
+            </div>
+        </div>
+
+        <!-- Slide 6: Classification -->
+        <div class="slide">
+            <h2>Feature 1: Automatic Sorting</h2>
+            <div class="media-row">
+                <div>
+                    <div class="categories">
+                        <span class="category-tag">Plastic</span>
+                        <span class="category-tag">Metal</span>
+                        <span class="category-tag">Glass</span>
+                        <span class="category-tag">Paper</span>
+                        <span class="category-tag">Organic</span>
+                        <span class="category-tag">Generic</span>
+                    </div>
+                    <ul>
+                        <li>High-confidence detection of bottles, cans, and packaging.</li>
+                        <li>Depth can add approximate volume for each deposited item as a future extension.</li>
+                    </ul>
+                </div>
+                <div class="visual-stack">
+                    <img class="slide-visual web-photo" src="https://robovision.ams3.cdn.digitaloceanspaces.com/transforms/images/44085/optical-sorting-plastics-Robovision_5ae402c9837860cd6e4f65e304b3a5fa.jpg" alt="Optical sorting system moving plastic recycling items">
+                    <div class="image-credit">Image source: <a href="https://robovision.ai/">robovision.ai</a></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Spatial Features -->
+        <div class="slide">
+            <h2>Feature 2: Wrong Items &amp; Collection Costs</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Wrong-Object Detection</h4>
+                    <p>If an item ends up in the wrong bin, the system flags it instead of treating the bin as clean.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>Position Tracking</h4>
+                    <p>Depth perception records where the object landed, so operators know where to retrieve it.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>Fullness Estimation</h4>
+                    <p>The same depth map estimates whether the trash can or eco-island is actually full.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>Smarter Pickup Timing</h4>
+                    <p>Operators avoid expensive collection trips when bins still have usable capacity.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Brand Analytics -->
+        <div class="slide">
+            <h2>Future Development: Anonymous Brand Insights</h2>
+            <div class="media-row">
+                <div>
+                    <ul>
+                        <li>The high-resolution RGB sensor can identify selected product brands, not only material types.</li>
+                        <li>This can create aggregate consumption statistics for a location or eco-island.</li>
+                        <li>It is a separate analytics layer from user authentication.</li>
+                        <li>Authentication is only for starting the disposal session, not for tracking brand behavior by person.</li>
+                    </ul>
+                    <div class="highlight-box">Brand analytics stays anonymized and operational: count what appears in the stream, not who threw it away.</div>
+                </div>
+                <div class="visual-stack">
+                    <img class="slide-visual web-photo" src="https://www.canpack.com/wp-content/uploads/2024/08/2024.08_Baner-Article-v4.png" alt="Branded beverage cans on a production-style banner">
+                    <div class="image-credit">Image source: <a href="https://www.canpack.com/">canpack.com</a></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Architecture -->
+        <div class="slide">
+            <h2>Architecture: Two Dashboard Views</h2>
+            <div class="media-row">
+                <div class="modules-grid">
+                    <div class="module-item"><strong>Sorting Dashboard:</strong> item class, confidence, selected bin, and automatic routing state.</div>
+                    <div class="module-item"><strong>Bin Monitor Dashboard:</strong> wrong-object alerts, object coordinates, fullness, and pickup readiness.</div>
+                    <div class="module-item"><strong>RGB-D Input:</strong> aligned RGB frames and depth maps from the OAK-D Pro.</div>
+                    <div class="module-item"><strong>Backend Services:</strong> user session, classification events, spatial events, and notifications.</div>
+                </div>
+                <img class="slide-visual" src="assets/presentation/eco-island-network.svg" alt="Eco-island network diagram connecting smart bins with backend services">
+            </div>
+        </div>
+
+        <!-- Slide 10: Prototype -->
+        <div class="slide">
+            <h2>The Hackathon Prototype</h2>
+            <div class="media-row">
+                <div>
+                    <p>We built the operator-facing dashboard for the depth-aware bin-monitoring track.</p>
+                    <ul>
+                        <li>Live camera stream and detected object status.</li>
+                        <li>Wrong-object alerts with position context.</li>
+                        <li>Depth-based fullness estimate for pickup decisions.</li>
+                    </ul>
+                    <div class="highlight-box">The sorting dashboard and bin-monitor dashboard are separate because they solve complementary operational problems.</div>
+                </div>
+                <img class="slide-visual" src="assets/presentation/dashboard-preview.svg" alt="Bin monitor dashboard preview with camera stream, controls, and metrics">
+            </div>
+        </div>
+
+        <!-- Slide 11: Value -->
+        <div class="slide">
+            <h2>Business &amp; Sustainability Value</h2>
+            <div class="stat-row">
+                <div class="stat-card"><strong>Cleaner Streams</strong><p>Automatic sorting reduces user mistakes before they contaminate recycling flows.</p></div>
+                <div class="stat-card"><strong>Lower Pickup Costs</strong><p>Depth-based fullness avoids collection when bins are still not full.</p></div>
+                <div class="stat-card"><strong>Faster Cleanup</strong><p>Wrong-object position tracking tells operators where to intervene.</p></div>
+            </div>
+            <div class="highlight-box">
+                The OAK-D Pro matters because this is not just classification: depth turns the eco-island into a measurable, verifiable system.
+            </div>
+        </div>
+
+        <!-- Slide 12: Closing -->
+        <div class="slide slide-title">
+            <div class="closing-mark">Ready</div>
+            <h1>for the Future</h1>
+            <p>Thank you for exploring our Smart Eco-Island solution.</p>
+            <p class="subtitle">Developed by Mesos</p>
+        </div>
+
+        <!-- Navigation Controls -->
+        <div class="controls">
+            <div style="display: flex; align-items: center; gap: 15px; flex: 1; justify-content: center;">
+                <span class="slide-counter"><span id="currentSlide">1</span> / <span id="totalSlides">12</span></span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+        document.getElementById('totalSlides').textContent = totalSlides;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            
+            if (n > totalSlides) currentSlide = totalSlides;
+            if (n < 1) currentSlide = 1;
+            
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            
+            document.getElementById('currentSlide').textContent = currentSlide;
+            document.getElementById('progressFill').style.width = `${(currentSlide / totalSlides) * 100}%`;
+        }
+
+        function changeSlide(n) {
+            currentSlide += n;
+            showSlide(currentSlide);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                changeSlide(-1);
+            }
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                changeSlide(1);
+            }
+        });
+
+        showSlide(currentSlide);
+    </script>
+</body>
+</html>

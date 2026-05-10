@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Bin monitor dashboard preview</title>
+  <desc id="desc">A dashboard-style interface with a camera stream, bin controls, metrics, and detection list.</desc>
+  <rect width="960" height="540" rx="24" fill="#101417"/>
+  <rect x="54" y="44" width="852" height="452" rx="18" fill="#171d21" stroke="#344148" stroke-width="2"/>
+  <rect x="86" y="76" width="238" height="18" rx="9" fill="#eef3f5"/>
+  <rect x="742" y="82" width="116" height="10" rx="5" fill="#a9b6bc"/>
+  <g transform="translate(86 122)">
+    <rect width="532" height="320" rx="14" fill="#20282d" stroke="#344148"/>
+    <rect x="16" y="16" width="500" height="258" rx="10" fill="#050708"/>
+    <g opacity=".24" stroke="#344148">
+      <path d="M16 80 h500 M16 144 h500 M16 208 h500"/>
+      <path d="M116 16 v258 M216 16 v258 M316 16 v258 M416 16 v258"/>
+    </g>
+    <rect x="64" y="66" width="152" height="114" fill="none" stroke="#76c7f2" stroke-width="4"/>
+    <rect x="78" y="82" width="84" height="74" rx="16" fill="#76c7f2" opacity=".55"/>
+    <rect x="282" y="98" width="124" height="138" fill="none" stroke="#5ee0a0" stroke-width="4"/>
+    <rect x="312" y="124" width="58" height="82" rx="14" fill="#5ee0a0" opacity=".58"/>
+    <rect x="16" y="290" width="120" height="10" rx="5" fill="#76c7f2"/>
+    <rect x="154" y="290" width="88" height="10" rx="5" fill="#344148"/>
+  </g>
+  <g transform="translate(644 122)">
+    <rect width="230" height="90" rx="14" fill="#20282d" stroke="#344148"/>
+    <rect x="18" y="18" width="82" height="10" rx="5" fill="#a9b6bc"/>
+    <rect x="18" y="44" width="116" height="22" rx="11" fill="#143142" stroke="#76c7f2"/>
+    <rect x="48" y="51" width="56" height="8" rx="4" fill="#d7f2ff"/>
+    <rect x="146" y="44" width="54" height="22" rx="11" fill="#20282d" stroke="#344148"/>
+  </g>
+  <g transform="translate(644 236)">
+    <rect width="104" height="88" rx="12" fill="#20282d" stroke="#344148"/>
+    <rect x="16" y="16" width="48" height="8" rx="4" fill="#a9b6bc"/>
+    <rect x="16" y="44" width="56" height="18" rx="9" fill="#5ee0a0"/>
+  </g>
+  <g transform="translate(770 236)">
+    <rect width="104" height="88" rx="12" fill="#20282d" stroke="#344148"/>
+    <rect x="16" y="16" width="58" height="8" rx="4" fill="#a9b6bc"/>
+    <rect x="16" y="44" width="68" height="18" rx="9" fill="#ffc857"/>
+  </g>
+  <g transform="translate(644 348)">
+    <rect width="230" height="94" rx="14" fill="#20282d" stroke="#344148"/>
+    <rect x="18" y="18" width="88" height="10" rx="5" fill="#a9b6bc"/>
+    <rect x="18" y="46" width="194" height="8" rx="4" fill="#344148"/>
+    <rect x="18" y="68" width="156" height="8" rx="4" fill="#344148"/>
+  </g>
+</svg>
