@@ -1,31 +1,106 @@
 #!/usr/bin/env python3
+import json
 import os
+import tarfile
 import threading
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List
+import pprint
 
 import depthai as dai
 
-from model_config import COCO_LABELS, COCO_TO_TRASH, TRASH_LABELS
+from model_config import COCO_LABELS, COCO_TO_TRASH
 from utils.arguments import initialize_argparser
 from webapp import DashboardServer, DashboardStore
 
 
-USE_TRASH_LABELS = False
+CUSTOM_LABELS: List[str] | None = None
+
+
+def _load_json_path(config_path: Path) -> Dict[str, Any]:
+    try:
+        return json.loads(config_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Missing config.json at {config_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {config_path}") from exc
+
+
+def _select_config_name(names: List[str], archive_path: Path) -> str:
+    candidates = [name for name in names if name.endswith("config.json")]
+    if not candidates:
+        raise FileNotFoundError(f"config.json not found in {archive_path}")
+    return min(candidates, key=len)
+
+
+def _load_config_json(archive_path: Path) -> Dict[str, Any]:
+    if archive_path.is_dir():
+        return _load_json_path(archive_path / "config.json")
+
+    suffix = "".join(archive_path.suffixes).lower()
+    if suffix.endswith(".zip"):
+        with zipfile.ZipFile(archive_path) as archive:
+            config_name = _select_config_name(archive.namelist(), archive_path)
+            data = archive.read(config_name)
+        return json.loads(data.decode("utf-8"))
+
+    if tarfile.is_tarfile(archive_path):
+        with tarfile.open(archive_path, "r:*") as archive:
+            names = [member.name for member in archive.getmembers() if member.isfile()]
+            config_name = _select_config_name(names, archive_path)
+            member = archive.getmember(config_name)
+            fileobj = archive.extractfile(member)
+            if fileobj is None:
+                raise FileNotFoundError(f"config.json not found in {archive_path}")
+            data = fileobj.read()
+        return json.loads(data.decode("utf-8"))
+
+    sidecar_candidates = [archive_path.with_suffix(".json"), archive_path.parent / "config.json"]
+    for candidate in sidecar_candidates:
+        if candidate.exists():
+            return _load_json_path(candidate)
+
+    raise FileNotFoundError(
+        "config.json not found. Expected it inside the archive or alongside the model file."
+    )
+
+
+def _load_custom_labels(archive_path: Path) -> List[str]:
+    config = _load_config_json(archive_path)
+    model = config.get("model")
+    if not isinstance(model, dict):
+        raise ValueError("config.json model not found")
+    
+    heads = model.get("heads")
+    if isinstance(heads, list):
+        if not heads:
+            raise ValueError("config.json model.heads is empty")
+        heads = heads[0]
+    
+    metadata = heads.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("config.json model.heads.metadata not found")
+
+    classes = metadata.get("classes")
+    if not isinstance(classes, list) or not all(isinstance(name, str) for name in classes):
+        raise ValueError("config.json model.heads.metadata.classes must be a list of strings")
+
+    return classes
 
 
 def _detection_label(detection: Any) -> str:
     label_id = int(getattr(detection, "label", -1))
-    if USE_TRASH_LABELS and 0 <= label_id < len(TRASH_LABELS):
-        return TRASH_LABELS[label_id]
+    if CUSTOM_LABELS and 0 <= label_id < len(CUSTOM_LABELS):
+        return CUSTOM_LABELS[label_id]
     if 0 <= label_id < len(COCO_LABELS):
         return COCO_LABELS[label_id]
     return f"class {label_id}"
 
 
 def _trash_label(label: str) -> str | None:
-    if label in TRASH_LABELS:
+    if CUSTOM_LABELS is not None:
         return label
     return COCO_TO_TRASH.get(label)
 
@@ -36,7 +111,7 @@ def _detection_dict(detection: Any) -> Dict[str, Any]:
     xmax = float(getattr(detection, "xmax", xmin))
     ymax = float(getattr(detection, "ymax", ymin))
     label = _detection_label(detection)
-    yolo_label = None if USE_TRASH_LABELS and label in TRASH_LABELS else label
+    yolo_label = None if CUSTOM_LABELS is not None else label
     return {
         "label": label,
         "yolo_label": yolo_label,
@@ -89,8 +164,8 @@ def _consume_depth(depth_queue, store: DashboardStore):
 
 
 def run_device(args):
-    global USE_TRASH_LABELS
-    USE_TRASH_LABELS = bool(args.model_archive_path)
+    global CUSTOM_LABELS
+    CUSTOM_LABELS = None
 
     device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
     web_host = args.web_host or "0.0.0.0"
@@ -114,6 +189,7 @@ def run_device(args):
             raise FileNotFoundError(f"NN archive not found: {archive_path}")
         print(f"Loading NN archive from disk: {archive_path}")
         nn_archive = dai.NNArchive(str(archive_path))
+        CUSTOM_LABELS = _load_custom_labels(archive_path)
     elif args.model_zoo_id:
         print(f"Fetching NN archive from Luxonis Model Zoo: {args.model_zoo_id}")
         model_description = dai.NNModelDescription(modelSlug=args.model_zoo_id)
