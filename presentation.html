@@ -37,23 +37,23 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 0;
         }
 
         .presentation-container {
-            width: 100%;
-            max-width: 1100px;
+            width: 100vw;
+            min-height: 100vh;
             background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
             overflow: hidden;
         }
 
         .slide {
             display: none;
             padding: 70px 60px;
-            min-height: 650px;
+            min-height: calc(100vh - 74px);
             animation: slideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
@@ -547,6 +547,94 @@
                 display: none;
             }
         }
+
+        @page {
+            size: A4 landscape;
+            margin: 0;
+        }
+
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                animation: none !important;
+                transition: none !important;
+            }
+
+            html,
+            body {
+                width: 297mm;
+                height: auto;
+                margin: 0;
+                padding: 0;
+                background: var(--bg);
+                display: block;
+                overflow: visible;
+            }
+
+            .presentation-container {
+                width: 297mm;
+                min-height: 0;
+                border: 0;
+                box-shadow: none;
+                overflow: visible;
+                background: var(--surface);
+            }
+
+            .slide,
+            .slide.active {
+                display: flex !important;
+                flex-direction: column;
+                justify-content: flex-start;
+                width: 297mm;
+                height: 210mm;
+                min-height: 0;
+                padding: 14mm 18mm;
+                overflow: hidden;
+                break-after: page;
+                page-break-after: always;
+            }
+
+            .slide-title,
+            .slide-title.active {
+                justify-content: center;
+            }
+
+            .slide h2 {
+                margin-bottom: 24px;
+                color: var(--info-strong) !important;
+                background: none !important;
+                -webkit-text-fill-color: var(--info-strong) !important;
+            }
+
+            .slide:last-of-type {
+                break-after: auto;
+                page-break-after: auto;
+            }
+
+            .controls {
+                display: none !important;
+            }
+
+            .workflow-card {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+
+            .slide li {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+
+            .slide-visual {
+                max-height: 92mm;
+                box-shadow: none;
+            }
+
+            .web-photo {
+                max-height: 90mm;
+            }
+        }
     </style>
 </head>
 <body>
@@ -554,7 +642,7 @@
         <!-- Slide 1: Title -->
         <div class="slide slide-title active">
             <h1>Smart Eco-Island Rubbish Detection</h1>
-            <p>AI-powered sorting plus depth-aware bin monitoring powered by Luxonis OAK-D Pro.</p>
+            <p>AI-powered sorting plus depth-aware bin monitoring powered by Luxonis OAK4-D R7.</p>
             <p class="subtitle">Designed to automate disposal decisions and verify what happens inside each bin.</p>
         </div>
 
@@ -626,7 +714,7 @@
 
         <!-- Slide 5: Hardware -->
         <div class="slide">
-            <h2>Why OAK-D Pro: Depth Is the Point</h2>
+            <h2>Why OAK4-D R7: Depth Is the Point</h2>
             <div class="media-row">
                 <div>
                     <div class="feature-grid">
@@ -719,7 +807,7 @@
                 <div class="modules-grid">
                     <div class="module-item"><strong>Sorting Dashboard:</strong> item class, confidence, selected bin, and automatic routing state.</div>
                     <div class="module-item"><strong>Bin Monitor Dashboard:</strong> wrong-object alerts, object coordinates, fullness, and pickup readiness.</div>
-                    <div class="module-item"><strong>RGB-D Input:</strong> aligned RGB frames and depth maps from the OAK-D Pro.</div>
+                    <div class="module-item"><strong>RGB-D Input:</strong> aligned RGB frames and depth maps from the OAK4-D R7.</div>
                     <div class="module-item"><strong>Backend Services:</strong> user session, classification events, spatial events, and notifications.</div>
                 </div>
                 <img class="slide-visual" src="assets/presentation/eco-island-network.svg" alt="Eco-island network diagram connecting smart bins with backend services">
@@ -752,7 +840,7 @@
                 <div class="stat-card"><strong>Faster Cleanup</strong><p>Wrong-object position tracking tells operators where to intervene.</p></div>
             </div>
             <div class="highlight-box">
-                The OAK-D Pro matters because this is not just classification: depth turns the eco-island into a measurable, verifiable system.
+                The OAK4-D R7 matters because this is not just classification: depth turns the eco-island into a measurable, verifiable system.
             </div>
         </div>
 
