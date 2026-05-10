@@ -4,21 +4,22 @@ import threading
 import time
 from typing import Any, Dict, List
 
-import cv2
 import depthai as dai
 
+from model_config import COCO_LABELS, COCO_TO_TRASH
 from utils.arguments import initialize_argparser
 from webapp import DashboardServer, DashboardStore
 
 
-TRASH_LABELS = ["plastic", "metal", "paper", "glass", "organic", "generic"]
-
-
 def _detection_label(detection: Any) -> str:
     label_id = int(getattr(detection, "label", -1))
-    if 0 <= label_id < len(TRASH_LABELS):
-        return TRASH_LABELS[label_id]
+    if 0 <= label_id < len(COCO_LABELS):
+        return COCO_LABELS[label_id]
     return f"class {label_id}"
+
+
+def _trash_label(yolo_label: str) -> str | None:
+    return COCO_TO_TRASH.get(yolo_label)
 
 
 def _detection_dict(detection: Any) -> Dict[str, Any]:
@@ -26,8 +27,11 @@ def _detection_dict(detection: Any) -> Dict[str, Any]:
     ymin = float(getattr(detection, "ymin", 0.0))
     xmax = float(getattr(detection, "xmax", xmin))
     ymax = float(getattr(detection, "ymax", ymin))
+    yolo_label = _detection_label(detection)
     return {
-        "label": _detection_label(detection),
+        "label": yolo_label,
+        "yolo_label": yolo_label,
+        "trash_label": _trash_label(yolo_label),
         "label_id": int(getattr(detection, "label", -1)),
         "confidence": float(getattr(detection, "confidence", 0.0)),
         "xmin": xmin,
@@ -46,40 +50,6 @@ def _depth_value_from_message(message: Any) -> float | None:
     return float(locations[0].spatialCoordinates.z)
 
 
-def _annotate_frame(frame, detections: List[Dict[str, Any]]):
-    height, width = frame.shape[:2]
-    for detection in detections:
-        x1 = max(0, min(width - 1, int(detection["xmin"] * width)))
-        y1 = max(0, min(height - 1, int(detection["ymin"] * height)))
-        x2 = max(0, min(width - 1, int(detection["xmax"] * width)))
-        y2 = max(0, min(height - 1, int(detection["ymax"] * height)))
-
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (102, 227, 180), 2)
-        label = f"{detection['label']} {int(detection['confidence'] * 100)}%"
-        (text_width, text_height), baseline = cv2.getTextSize(
-            label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
-        )
-        top = max(0, y1 - text_height - baseline - 8)
-        cv2.rectangle(
-            frame,
-            (x1, top),
-            (x1 + text_width + 10, top + text_height + baseline + 8),
-            (17, 24, 39),
-            -1,
-        )
-        cv2.putText(
-            frame,
-            label,
-            (x1 + 5, top + text_height + 3),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (235, 243, 255),
-            2,
-        )
-
-    return frame
-
-
 def _consume_frames(frame_queue, store: DashboardStore):
     while True:
         message = frame_queue.get()
@@ -87,13 +57,7 @@ def _consume_frames(frame_queue, store: DashboardStore):
             continue
 
         frame = message.getCvFrame()
-        detections = store.snapshot().detections
-        annotated = _annotate_frame(frame, detections)
-        success, encoded = cv2.imencode(
-            ".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82]
-        )
-        if success:
-            store.update_frame(encoded.tobytes())
+        store.update_frame(frame)
 
 
 def _consume_detections(detection_queue, store: DashboardStore):

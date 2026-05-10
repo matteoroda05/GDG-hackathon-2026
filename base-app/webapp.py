@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
+import cv2
 
 TRASH_CLASSES = ["plastic", "metal", "paper", "glass", "organic", "generic"]
 DEFAULT_BIN_SETTINGS = {
-    "max_average_depth_mm": 1000.0,
+    "bin_floor_distance": 1000.0,
     "empty_threshold_percent": 80.0,
 }
 DEFAULT_EXPECTED_CLASS = "generic"
@@ -19,7 +20,7 @@ DEFAULT_EXPECTED_CLASS = "generic"
 
 @dataclass
 class DashboardState:
-    frame_jpeg: Optional[bytes] = None
+    frame_bgr: Optional[Any] = None
     detections: List[Dict[str, Any]] = field(default_factory=list)
     depth_mm: Optional[float] = None
     updated_at: float = 0.0
@@ -30,9 +31,9 @@ class DashboardStore:
         self._state = DashboardState()
         self._lock = threading.Lock()
 
-    def update_frame(self, frame_jpeg: bytes) -> None:
+    def update_frame(self, frame_bgr: Any) -> None:
         with self._lock:
-            self._state.frame_jpeg = frame_jpeg
+            self._state.frame_bgr = frame_bgr
             self._state.updated_at = time.time()
 
     def update_detections(self, detections: List[Dict[str, Any]]) -> None:
@@ -48,11 +49,87 @@ class DashboardStore:
     def snapshot(self) -> DashboardState:
         with self._lock:
             return DashboardState(
-                frame_jpeg=self._state.frame_jpeg,
+                frame_bgr=self._state.frame_bgr,
                 detections=list(self._state.detections),
                 depth_mm=self._state.depth_mm,
                 updated_at=self._state.updated_at,
             )
+
+
+def _annotate_frame(
+    frame,
+    detections: List[Dict[str, Any]],
+    expected_class: Optional[str] = None,
+    highlight_wrong_only: bool = False,
+):
+    height, width = frame.shape[:2]
+    selected_class = normalize_expected_class(expected_class)
+    for detection in detections:
+      yolo_label = detection.get("yolo_label") or detection.get("label")
+      trash_label = detection.get("trash_label")
+      is_wrong = expected_class is not None and trash_label != selected_class
+      if highlight_wrong_only and not is_wrong:
+          continue
+
+      x1 = max(0, min(width - 1, int(detection["xmin"] * width)))
+      y1 = max(0, min(height - 1, int(detection["ymin"] * height)))
+      x2 = max(0, min(width - 1, int(detection["xmax"] * width)))
+      y2 = max(0, min(height - 1, int(detection["ymax"] * height)))
+
+      color = (92, 231, 167) if not is_wrong else (74, 74, 255)
+      thickness = 2 if not is_wrong else 3
+      cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+      label_text = f"{yolo_label} {int(detection.get('confidence', 0) * 100)}%"
+      if trash_label is not None:
+        label_text = f"{label_text} -> {trash_label}"
+      else:
+        label_text = f"{label_text} -> unmapped"
+      if is_wrong:
+          label_text = f"{label_text} wrong"
+      (text_width, text_height), baseline = cv2.getTextSize(
+          label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
+      )
+      top = max(0, y1 - text_height - baseline - 8)
+      cv2.rectangle(
+          frame,
+          (x1, top),
+          (x1 + text_width + 10, top + text_height + baseline + 8),
+          (17, 24, 39),
+          -1,
+      )
+      cv2.putText(
+          frame,
+          label_text,
+          (x1 + 5, top + text_height + 3),
+          cv2.FONT_HERSHEY_SIMPLEX,
+          0.6,
+          (235, 243, 255),
+          2,
+      )
+
+    return frame
+
+
+def _encode_annotated_frame(
+    state: DashboardState,
+    expected_class: Optional[str],
+    highlight_wrong_only: bool,
+) -> Optional[bytes]:
+    if state.frame_bgr is None:
+        return None
+    frame = state.frame_bgr.copy()
+    annotated = _annotate_frame(
+        frame,
+        state.detections,
+        expected_class=expected_class,
+        highlight_wrong_only=highlight_wrong_only,
+    )
+    success, encoded = cv2.imencode(
+        ".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82]
+    )
+    if not success:
+        return None
+    return encoded.tobytes()
 
 
 def _default_config_path() -> Path:
@@ -80,15 +157,15 @@ def load_bin_config(config_path: Optional[Path] = None) -> Dict[str, Dict[str, f
     for class_name in TRASH_CLASSES:
         raw_settings = raw_config.get(class_name, {}) if isinstance(raw_config, dict) else {}
         max_depth = _coerce_float(
-            raw_settings.get("max_average_depth_mm"),
-            DEFAULT_BIN_SETTINGS["max_average_depth_mm"],
+            raw_settings.get("bin_floor_distance"),
+            DEFAULT_BIN_SETTINGS["bin_floor_distance"],
         )
         threshold = _coerce_float(
             raw_settings.get("empty_threshold_percent"),
             DEFAULT_BIN_SETTINGS["empty_threshold_percent"],
         )
         config[class_name] = {
-            "max_average_depth_mm": max(max_depth, 1.0),
+            "bin_floor_distance": max(max_depth, 1.0),
             "empty_threshold_percent": min(max(threshold, 0.0), 100.0),
         }
     return config
@@ -105,11 +182,11 @@ def normalize_expected_class(value: Optional[str]) -> str:
 
 def compute_fullness_percent(
     average_depth_mm: Optional[float],
-    max_average_depth_mm: float,
+    bin_floor_distance: float,
 ) -> Optional[float]:
     if average_depth_mm is None:
         return None
-    fullness = ((max_average_depth_mm - average_depth_mm) / max_average_depth_mm) * 100.0
+    fullness = ((bin_floor_distance - average_depth_mm) / bin_floor_distance) * 100.0
     return round(min(max(fullness, 0.0), 100.0), 1)
 
 
@@ -120,13 +197,13 @@ def build_state_payload(
 ) -> Dict[str, Any]:
     selected_class = normalize_expected_class(expected_class)
     selected_config = bin_config.get(selected_class, DEFAULT_BIN_SETTINGS)
-    max_depth = selected_config["max_average_depth_mm"]
+    max_depth = selected_config["bin_floor_distance"]
     threshold = selected_config["empty_threshold_percent"]
     fullness_percent = compute_fullness_percent(state.depth_mm, max_depth)
     wrong_objects = [
-        detection
-        for detection in state.detections
-        if detection.get("label") != selected_class
+      detection
+      for detection in state.detections
+      if detection.get("trash_label") != selected_class
     ]
 
     return {
@@ -135,7 +212,7 @@ def build_state_payload(
         "bin_config": selected_config,
         "average_depth_mm": state.depth_mm,
         "depth_mm": state.depth_mm,
-        "max_average_depth_mm": max_depth,
+        "bin_floor_distance": max_depth,
         "empty_threshold_percent": threshold,
         "fullness_percent": fullness_percent,
         "is_full_enough_to_empty": (
@@ -186,6 +263,28 @@ _DASHBOARD_HTML = """
       gap: 16px;
       align-items: end;
     }
+    .tab-bar {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 0 20px 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tab-button {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 18px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab-button.active {
+      border-color: var(--info);
+      background: #143142;
+      color: #d7f2ff;
+    }
     h1 {
       margin: 0;
       font-size: clamp(1.7rem, 4vw, 3rem);
@@ -200,9 +299,14 @@ _DASHBOARD_HTML = """
       max-width: 1360px;
       margin: 0 auto;
       padding: 12px 20px 28px;
-      display: grid;
+    }
+    .tab-panel {
+      display: none;
       grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.9fr);
       gap: 16px;
+    }
+    .tab-panel.active {
+      display: grid;
     }
     .panel {
       background: var(--surface);
@@ -348,7 +452,7 @@ _DASHBOARD_HTML = """
         align-items: start;
         flex-direction: column;
       }
-      main {
+      .tab-panel {
         grid-template-columns: 1fr;
       }
     }
@@ -372,63 +476,96 @@ _DASHBOARD_HTML = """
     <h1>Bin Monitor</h1>
     <div id="lastUpdate" class="timestamp">Last update: --</div>
   </header>
+  <nav class="tab-bar">
+    <button id="tabIdentification" class="tab-button active" type="button">Identification</button>
+    <button id="tabBinState" class="tab-button" type="button">Bin State</button>
+  </nav>
   <main>
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Computer Vision Image</h2>
-        <div id="streamStatus" class="pill">Live stream</div>
-      </div>
-      <div class="viewer">
-        <img src="/stream.mjpg" alt="Annotated computer vision stream" />
+    <section id="panelIdentification" class="tab-panel active">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Computer Vision Image</h2>
+          <div id="streamStatus" class="pill">Live stream</div>
+        </div>
+        <div class="viewer">
+          <img id="identificationStream" src="/stream.mjpg" alt="Annotated computer vision stream" />
+        </div>
+      </section>
+      <div class="side">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Detected Objects</h2>
+            <div id="detectionCountIdentification" class="pill">0 objects</div>
+          </div>
+          <div id="detectionListIdentification" class="detection-list"></div>
+        </section>
       </div>
     </section>
-    <div class="side">
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Expected Bin</h2>
-          <div id="selectedBin" class="pill">generic</div>
-        </div>
-        <div id="classControls" class="control-grid"></div>
-      </section>
 
+    <section id="panelBinState" class="tab-panel">
       <section class="panel">
         <div class="panel-head">
-          <h2>Recap</h2>
-          <div id="emptyThreshold" class="pill">Threshold --</div>
+          <h2>Wrong Items Highlight</h2>
+          <div id="binStreamStatus" class="pill">Bin view</div>
         </div>
-        <div class="summary">
-          <div class="metric">
-            <div class="metric-label">Wrong object</div>
-            <div id="wrongStatus" class="metric-value muted">--</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Fullness</div>
-            <div id="fullnessValue" class="metric-value muted">--</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Average depth</div>
-            <div id="depthValue" class="metric-value muted">--</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Empty bin</div>
-            <div id="emptyStatus" class="metric-value muted">--</div>
-          </div>
-        </div>
-        <div class="recap">
-          <div id="recapText" class="recap-box">Waiting for detections.</div>
+        <div class="viewer">
+          <img id="binStream" src="/stream-wrong.mjpg" alt="Bin view with wrong items highlighted" />
         </div>
       </section>
+      <div class="side">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Expected Bin</h2>
+            <div id="selectedBin" class="pill">generic</div>
+          </div>
+          <div id="classControls" class="control-grid"></div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Detected Objects</h2>
-          <div id="detectionCount" class="pill">0 objects</div>
-        </div>
-        <div id="detectionList" class="detection-list"></div>
-      </section>
-    </div>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Recap</h2>
+            <div id="emptyThreshold" class="pill">Threshold --</div>
+          </div>
+          <div class="summary">
+            <div class="metric">
+              <div class="metric-label">Wrong object</div>
+              <div id="wrongStatus" class="metric-value muted">--</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Fullness</div>
+              <div id="fullnessValue" class="metric-value muted">--</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Average depth</div>
+              <div id="depthValue" class="metric-value muted">--</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Empty bin</div>
+              <div id="emptyStatus" class="metric-value muted">--</div>
+            </div>
+          </div>
+          <div class="recap">
+            <div id="recapText" class="recap-box">Waiting for detections.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Bin Contents</h2>
+            <div id="detectionCountBin" class="pill">0 objects</div>
+          </div>
+          <div id="detectionListBin" class="detection-list"></div>
+        </section>
+      </div>
+    </section>
   </main>
   <script>
+    const tabIdentification = document.getElementById('tabIdentification');
+    const tabBinState = document.getElementById('tabBinState');
+    const panelIdentification = document.getElementById('panelIdentification');
+    const panelBinState = document.getElementById('panelBinState');
+    const binStream = document.getElementById('binStream');
+
     const classControls = document.getElementById('classControls');
     const selectedBin = document.getElementById('selectedBin');
     const wrongStatus = document.getElementById('wrongStatus');
@@ -437,13 +574,26 @@ _DASHBOARD_HTML = """
     const emptyStatus = document.getElementById('emptyStatus');
     const emptyThreshold = document.getElementById('emptyThreshold');
     const recapText = document.getElementById('recapText');
-    const detectionCount = document.getElementById('detectionCount');
-    const detectionList = document.getElementById('detectionList');
+    const detectionCountIdentification = document.getElementById('detectionCountIdentification');
+    const detectionListIdentification = document.getElementById('detectionListIdentification');
+    const detectionCountBin = document.getElementById('detectionCountBin');
+    const detectionListBin = document.getElementById('detectionListBin');
     const lastUpdate = document.getElementById('lastUpdate');
 
     const classes = ['plastic', 'metal', 'paper', 'glass', 'organic', 'generic'];
     let expectedClass = new URLSearchParams(window.location.search).get('expected_class') || 'generic';
     if (!classes.includes(expectedClass)) expectedClass = 'generic';
+
+    function setActiveTab(tab) {
+      const isIdentification = tab === 'identification';
+      tabIdentification.classList.toggle('active', isIdentification);
+      tabBinState.classList.toggle('active', !isIdentification);
+      panelIdentification.classList.toggle('active', isIdentification);
+      panelBinState.classList.toggle('active', !isIdentification);
+    }
+
+    tabIdentification.addEventListener('click', () => setActiveTab('identification'));
+    tabBinState.addEventListener('click', () => setActiveTab('bin'));
 
     function setValue(node, value, tone) {
       node.textContent = value;
@@ -463,6 +613,7 @@ _DASHBOARD_HTML = """
           url.searchParams.set('expected_class', expectedClass);
           window.history.replaceState({}, '', url);
           renderControls();
+          binStream.src = `/stream-wrong.mjpg?expected_class=${encodeURIComponent(expectedClass)}&t=${Date.now()}`;
           refreshState();
         });
         classControls.appendChild(button);
@@ -470,21 +621,23 @@ _DASHBOARD_HTML = """
       selectedBin.textContent = expectedClass;
     }
 
-    function renderDetections(detections) {
-      detectionList.innerHTML = '';
-      detectionCount.textContent = `${detections.length} ${detections.length === 1 ? 'object' : 'objects'}`;
+    function renderDetections(detections, listNode, countNode) {
+      listNode.innerHTML = '';
+      countNode.textContent = `${detections.length} ${detections.length === 1 ? 'object' : 'objects'}`;
       if (!detections.length) {
-        detectionList.innerHTML = '<div class="empty">No detections yet.</div>';
+        listNode.innerHTML = '<div class="empty">No detections yet.</div>';
         return;
       }
 
       detections.forEach((det) => {
+        const yoloLabel = det.yolo_label || det.label || 'unknown';
+        const trashLabel = det.trash_label || 'unmapped';
         const item = document.createElement('div');
         item.className = 'detection-item';
 
         const title = document.createElement('div');
         title.className = 'detection-title';
-        title.innerHTML = `<span>${det.label}</span><span>${Math.round(det.confidence * 100)}%</span>`;
+        title.innerHTML = `<span>${yoloLabel} - ${trashLabel}</span><span>${Math.round(det.confidence * 100)}%</span>`;
 
         const meta = document.createElement('div');
         meta.className = 'detection-meta';
@@ -492,14 +645,14 @@ _DASHBOARD_HTML = """
 
         item.appendChild(title);
         item.appendChild(meta);
-        detectionList.appendChild(item);
+        listNode.appendChild(item);
       });
     }
 
     function renderRecap(state) {
       const depth = state.average_depth_mm;
       const fullness = state.fullness_percent;
-      const wrongLabels = [...new Set(state.wrong_objects.map((item) => item.label))];
+      const wrongLabels = [...new Set(state.wrong_objects.map((item) => item.trash_label || 'unmapped'))];
 
       if (state.has_wrong_object) {
         setValue(wrongStatus, 'Yes', 'bad');
@@ -543,9 +696,15 @@ _DASHBOARD_HTML = """
         const response = await fetch(`/api/state?expected_class=${encodeURIComponent(expectedClass)}`, { cache: 'no-store' });
         const state = await response.json();
 
+        const previousClass = expectedClass;
         expectedClass = state.expected_class || expectedClass;
+        if (expectedClass !== previousClass) {
+          renderControls();
+          binStream.src = `/stream-wrong.mjpg?expected_class=${encodeURIComponent(expectedClass)}&t=${Date.now()}`;
+        }
         selectedBin.textContent = expectedClass;
-        renderDetections(state.detections);
+        renderDetections(state.detections, detectionListIdentification, detectionCountIdentification);
+        renderDetections(state.detections, detectionListBin, detectionCountBin);
         renderRecap(state);
         lastUpdate.textContent = state.updated_at ? `Last update: ${new Date(state.updated_at * 1000).toLocaleTimeString()}` : 'Last update: --';
       } catch (error) {
@@ -554,6 +713,7 @@ _DASHBOARD_HTML = """
     }
 
     renderControls();
+    binStream.src = `/stream-wrong.mjpg?expected_class=${encodeURIComponent(expectedClass)}`;
     refreshState();
     setInterval(refreshState, 350);
   </script>
@@ -603,7 +763,39 @@ def _build_handler(store: DashboardStore, bin_config: Dict[str, Dict[str, float]
                 try:
                     while True:
                         state = store.snapshot()
-                        frame = state.frame_jpeg
+                        frame = _encode_annotated_frame(
+                            state, expected_class=None, highlight_wrong_only=False
+                        )
+                        if frame:
+                            self.wfile.write(b"--frame\r\n")
+                            self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                            self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode("utf-8"))
+                            self.wfile.write(frame)
+                            self.wfile.write(b"\r\n")
+                            self.wfile.flush()
+                        time.sleep(0.08)
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    return
+
+            if parsed.path == "/stream-wrong.mjpg":
+                query = parse_qs(parsed.query)
+                expected_class = query.get("expected_class", [None])[0]
+
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+                self.end_headers()
+
+                try:
+                    while True:
+                        state = store.snapshot()
+                        frame = _encode_annotated_frame(
+                            state,
+                            expected_class=expected_class,
+                            highlight_wrong_only=True,
+                        )
                         if frame:
                             self.wfile.write(b"--frame\r\n")
                             self.wfile.write(b"Content-Type: image/jpeg\r\n")
