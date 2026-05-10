@@ -12,13 +12,14 @@ Running this example requires a **Luxonis device** connected to your computer. R
 
 You can run the example fully on device ([`STANDALONE` mode](#standalone-mode-rvc4-only)) or using your computer as host ([`PERIPHERAL` mode](#peripheral-mode)).
 
-Here is a list of all available parameters:
+Here is a list of some available parameters:
 
 ```
 -d DEVICE, --device DEVICE
                       Optional name, DeviceID or IP of the camera to connect to. (default: None)
 --web-host WEB_HOST   Host interface for the browser dashboard. (default: 0.0.0.0)
 --web-port WEB_PORT   Port for the browser dashboard. (default: 8080)
+--model-archive-path MODEL_PATH
 ```
 
 ## Peripheral Mode
@@ -42,17 +43,19 @@ Running in peripheral mode requires a host computer and there will be communicat
 
 ### Examples
 
-```bash
-python3 main.py
-```
-
-This will run the example with default arguments. Open the dashboard in your browser at http://localhost:8080 or http://localhost:8080/bin-monitor.
-
-If you want to change the dashboard host or port, pass the new values explicitly:
+Run with a connected device:
 
 ```bash
-python3 main.py --web-host 0.0.0.0 --web-port 8080
+python main.py -d <device-id>
 ```
+
+Run with a custom model archive (labels loaded from the archive config):
+
+```bash
+python main.py -d <device-id> --model-archive-path <path-to-model>
+```
+
+Open the dashboard in your browser at http://localhost:8080 or http://localhost:8080/bin-monitor.
 
 ## Bin Configuration
 
