@@ -2,24 +2,32 @@
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 import depthai as dai
 
-from model_config import COCO_LABELS, COCO_TO_TRASH
+from model_config import COCO_LABELS, COCO_TO_TRASH, TRASH_LABELS
 from utils.arguments import initialize_argparser
 from webapp import DashboardServer, DashboardStore
 
 
+USE_TRASH_LABELS = False
+
+
 def _detection_label(detection: Any) -> str:
     label_id = int(getattr(detection, "label", -1))
+    if USE_TRASH_LABELS and 0 <= label_id < len(TRASH_LABELS):
+        return TRASH_LABELS[label_id]
     if 0 <= label_id < len(COCO_LABELS):
         return COCO_LABELS[label_id]
     return f"class {label_id}"
 
 
-def _trash_label(yolo_label: str) -> str | None:
-    return COCO_TO_TRASH.get(yolo_label)
+def _trash_label(label: str) -> str | None:
+    if label in TRASH_LABELS:
+        return label
+    return COCO_TO_TRASH.get(label)
 
 
 def _detection_dict(detection: Any) -> Dict[str, Any]:
@@ -27,11 +35,12 @@ def _detection_dict(detection: Any) -> Dict[str, Any]:
     ymin = float(getattr(detection, "ymin", 0.0))
     xmax = float(getattr(detection, "xmax", xmin))
     ymax = float(getattr(detection, "ymax", ymin))
-    yolo_label = _detection_label(detection)
+    label = _detection_label(detection)
+    yolo_label = None if USE_TRASH_LABELS and label in TRASH_LABELS else label
     return {
-        "label": yolo_label,
+        "label": label,
         "yolo_label": yolo_label,
-        "trash_label": _trash_label(yolo_label),
+        "trash_label": _trash_label(label),
         "label_id": int(getattr(detection, "label", -1)),
         "confidence": float(getattr(detection, "confidence", 0.0)),
         "xmin": xmin,
@@ -80,6 +89,9 @@ def _consume_depth(depth_queue, store: DashboardStore):
 
 
 def run_device(args):
+    global USE_TRASH_LABELS
+    USE_TRASH_LABELS = bool(args.model_archive_path)
+
     device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
     web_host = args.web_host or "0.0.0.0"
     web_port = int(args.web_port or os.environ.get("PORT", "8080"))
@@ -96,11 +108,21 @@ def run_device(args):
     print("Creating pipeline...")
     platform = device.getPlatform()
 
-    model_description = dai.NNModelDescription.fromYamlFile(
-        f"yolov6_nano_r2_coco.{platform.name}.yaml"
-    )
-
-    nn_archive = dai.NNArchive(dai.getModelFromZoo(model_description))
+    if args.model_archive_path:
+        archive_path = Path(args.model_archive_path)
+        if not archive_path.exists():
+            raise FileNotFoundError(f"NN archive not found: {archive_path}")
+        print(f"Loading NN archive from disk: {archive_path}")
+        nn_archive = dai.NNArchive(str(archive_path))
+    elif args.model_zoo_id:
+        print(f"Fetching NN archive from Luxonis Model Zoo: {args.model_zoo_id}")
+        model_description = dai.NNModelDescription(modelSlug=args.model_zoo_id)
+        nn_archive = dai.NNArchive(dai.getModelFromZoo(model_description))
+    else:
+        model_description = dai.NNModelDescription.fromYamlFile(
+            f"yolov6_nano_r2_coco.{platform.name}.yaml"
+        )
+        nn_archive = dai.NNArchive(dai.getModelFromZoo(model_description))
     camera_node = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
 
     if platform == dai.Platform.RVC2:

@@ -65,11 +65,12 @@ def _annotate_frame(
     height, width = frame.shape[:2]
     selected_class = normalize_expected_class(expected_class)
     for detection in detections:
-      yolo_label = detection.get("yolo_label") or detection.get("label")
+      yolo_label = detection.get("yolo_label")
       trash_label = detection.get("trash_label")
+      display_label = yolo_label or trash_label or detection.get("label") or "unknown"
       is_wrong = expected_class is not None and trash_label != selected_class
       if highlight_wrong_only and not is_wrong:
-          continue
+        continue
 
       x1 = max(0, min(width - 1, int(detection["xmin"] * width)))
       y1 = max(0, min(height - 1, int(detection["ymin"] * height)))
@@ -79,32 +80,30 @@ def _annotate_frame(
       color = (92, 231, 167) if not is_wrong else (74, 74, 255)
       thickness = 2 if not is_wrong else 3
       cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-      label_text = f"{yolo_label} {int(detection.get('confidence', 0) * 100)}%"
-      if trash_label is not None:
+      label_text = f"{display_label} {int(detection.get('confidence', 0) * 100)}%"
+      if yolo_label and trash_label:
         label_text = f"{label_text} -> {trash_label}"
-      else:
-        label_text = f"{label_text} -> unmapped"
       if is_wrong:
-          label_text = f"{label_text} wrong"
+        label_text = f"{label_text} wrong"
       (text_width, text_height), baseline = cv2.getTextSize(
-          label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
+        label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
       )
       top = max(0, y1 - text_height - baseline - 8)
       cv2.rectangle(
-          frame,
-          (x1, top),
-          (x1 + text_width + 10, top + text_height + baseline + 8),
-          (17, 24, 39),
-          -1,
+        frame,
+        (x1, top),
+        (x1 + text_width + 10, top + text_height + baseline + 8),
+        (17, 24, 39),
+        -1,
       )
       cv2.putText(
-          frame,
-          label_text,
-          (x1 + 5, top + text_height + 3),
-          cv2.FONT_HERSHEY_SIMPLEX,
-          0.6,
-          (235, 243, 255),
-          2,
+        frame,
+        label_text,
+        (x1 + 5, top + text_height + 3),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (235, 243, 255),
+        2,
       )
 
     return frame
@@ -630,14 +629,16 @@ _DASHBOARD_HTML = """
       }
 
       detections.forEach((det) => {
+        const hasYolo = !!det.yolo_label;
         const yoloLabel = det.yolo_label || det.label || 'unknown';
         const trashLabel = det.trash_label || 'unmapped';
+        const titleLabel = hasYolo ? `${yoloLabel} - ${trashLabel}` : trashLabel;
         const item = document.createElement('div');
         item.className = 'detection-item';
 
         const title = document.createElement('div');
         title.className = 'detection-title';
-        title.innerHTML = `<span>${yoloLabel} - ${trashLabel}</span><span>${Math.round(det.confidence * 100)}%</span>`;
+        title.innerHTML = `<span>${titleLabel}</span><span>${Math.round(det.confidence * 100)}%</span>`;
 
         const meta = document.createElement('div');
         meta.className = 'detection-meta';

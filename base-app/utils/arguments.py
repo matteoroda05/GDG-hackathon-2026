@@ -33,6 +33,22 @@ def initialize_argparser():
         type=int,
     )
 
+    parser.add_argument(
+        "--model-archive-path",
+        help="Path to a local NN archive (.blob/.tar/.zip) for a finetuned model.",
+        required=False,
+        default=None,
+        type=str,
+    )
+
+    parser.add_argument(
+        "--model-zoo-id",
+        help="Luxonis Model Zoo identifier to fetch (overrides default yaml).",
+        required=False,
+        default=None,
+        type=str,
+    )
+
     args = parser.parse_args()
 
     return parser, args
